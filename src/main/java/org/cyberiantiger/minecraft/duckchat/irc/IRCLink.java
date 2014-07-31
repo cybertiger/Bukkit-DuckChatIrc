@@ -151,8 +151,6 @@ public class IRCLink {
         public void unknown(String prefix, String command, String middle, String trailing) {
             plugin.getLogger().info(name + ": Unknown message prefix: " + prefix + " command: " + command + " middle: " + middle + " trailing: " + trailing);
         }
-
-        
         
         @Override
         public void onRegistered() {
@@ -176,11 +174,6 @@ public class IRCLink {
                     IRCLink.this.plugin.getLogger().log(Level.SEVERE, name + ": Error reconnecting to IRC.");
                 }
             }
-        }
-        
-        @Override
-        public void onPing(String ping) {
-            IRCLink.this.ircConnection.doPong(ping);
         }
         
         @Override
