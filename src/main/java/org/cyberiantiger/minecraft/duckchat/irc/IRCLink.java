@@ -146,6 +146,13 @@ public class IRCLink {
         public void onNotice(String target, IRCUser user, String msg) {
             plugin.getLogger().info(name + ": Notice to: " + target + " from: " + user + " message: " +  msg);
         }
+
+        @Override
+        public void unknown(String prefix, String command, String middle, String trailing) {
+            plugin.getLogger().info(name + ": Unknown message prefix: " + prefix + " command: " + command + " middle: " + middle + " trailing: " + trailing);
+        }
+
+        
         
         @Override
         public void onRegistered() {
