@@ -176,7 +176,7 @@ public class IRCLink {
 
         @Override
         public void onError(int num, String msg) {
-            plugin.getLogger().warning("IRC ERROR " + num + ": " + msg);
+            plugin.getLogger().warning("IRC Error " + num + ": " + msg);
         }
 
             
