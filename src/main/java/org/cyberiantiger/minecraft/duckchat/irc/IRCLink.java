@@ -168,19 +168,17 @@ public class IRCLink {
         }
 
         @Override
-        public void unknown(String prefix, String command, String middle, String trailing) {
-            plugin.getLogger().info(name + ": Unknown message prefix: " + prefix + " command: " + command + " middle: " + middle + " trailing: " + trailing);
-        }
-        
-        @Override
-        public void onRegistered() {
-            IRCLink.this.plugin.getLogger().info(name + ": Connected to IRC server " + host + ":" + port);
-            for (String ircChannel : ircToDuck.keySet()) {
-                ircConnection.doJoin(ircChannel);
+        public void onReply(int num, String value, String msg) {
+            if (num == 1) {
+                IRCLink.this.plugin.getLogger().info(name + ": Connected to IRC server " + host + ":" + port);
+                for (String ircChannel : ircToDuck.keySet()) {
+                    ircConnection.doJoin(ircChannel);
+                }
+                synchronized (IRCLink.this) {
+                    IRCLink.this.haveRegistered = true;
+                }
             }
-            synchronized (IRCLink.this) {
-                IRCLink.this.haveRegistered = true;
-            }
+            plugin.getLogger().info(name + ": Reply " + num + " = " + value + ": " + msg);
         }
         
         @Override
