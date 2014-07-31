@@ -23,6 +23,7 @@ import org.cyberiantiger.minecraft.duckchat.command.PermissionException;
 import org.cyberiantiger.minecraft.duckchat.command.SenderTypeException;
 import org.cyberiantiger.minecraft.duckchat.command.SubCommandException;
 import org.cyberiantiger.minecraft.duckchat.command.UsageException;
+import org.cyberiantiger.minecraft.duckchat.irc.command.ReloadSubCommand;
 import org.cyberiantiger.minecraft.duckchat.state.StateManager;
 
 /**
@@ -137,6 +138,7 @@ public class Main extends JavaPlugin implements Listener {
 
     private Map<String, SubCommand> subcommands = new LinkedHashMap<String, SubCommand>();
     {
+        subcommands.put("reload", new ReloadSubCommand(this));
     }
 
     private void executeCommand(CommandSender sender, SubCommand cmd, String label, String[] args) {
