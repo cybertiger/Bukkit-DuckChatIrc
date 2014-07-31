@@ -40,8 +40,11 @@ public class IRCLink {
                     return;
                 }
                 if (duckToIrc.containsKey(e.getChannel())) {
-                    String message = ControlCodeTranslator.MINECRAFT.translate(e.getMessage(), ControlCodes.IRC, true);
-                    ircConnection.doPrivmsg(duckToIrc.get(e.getChannel()), message);
+                    String ircChannel = duckToIrc.get(e.getChannel());
+                    if (joinedChannels.get(ircChannel)) {
+                        String message = ControlCodeTranslator.MINECRAFT.translate(e.getMessage(), ControlCodes.IRC, true);
+                        ircConnection.doPrivmsg(duckToIrc.get(e.getChannel()), message);
+                    }
                 }
             }
         }
@@ -104,41 +107,58 @@ public class IRCLink {
     private final IRCEventAdapter ircEventAdapter = new IRCEventAdapter() {
         @Override
         public void onPrivmsg(String target, IRCUser user, String msg) {
-            if (ircToDuck.containsKey(target)) {
-                String targetChannel = ircToDuck.get(target);
-                if (msg.startsWith("\u0001ACTION ") && msg.endsWith("\u0001")) {
-                    msg = msg.substring("\u0001ACTION ".length(), msg.length() - 1);
-                    msg = ControlCodeTranslator.IRC.translate(msg, ControlCodes.MINECRAFT, true);
-                    IRCLink.this.plugin.sendChannelMessage(IRC_CLIENT_IDENTITY, targetChannel, String.format(IRCLink.this.actionFormat, user, msg));
-                } else if (msg.equals(".players")) {
-                    Map<String, List<String>> players = plugin.getState().getPlayersByServer(true);
-                    List<String> servers = new ArrayList<String>(players.size());
-                    servers.addAll(players.keySet());
-                    Collections.sort(servers, String.CASE_INSENSITIVE_ORDER);
-                    int serverCount = servers.size();
-                    int playerCount = 0;
-                    for (List<String> playerList : players.values()) {
-                        Collections.sort(playerList, String.CASE_INSENSITIVE_ORDER);
-                        playerCount += playerList.size();
-                    }
-                    IRCLink.this.ircConnection.doPrivmsg(target, plugin.translate("irc.playerlist.header", serverCount, playerCount));
-                    for (String serverName : servers) {
-                        List<String> playerList = players.get(serverName);
-                        StringBuilder playerListString = new StringBuilder();
-                        for (int i = 0; i < playerList.size(); i++) {
-                            if (i != 0) {
-                                playerListString.append(", ");
+            Runnable postAction = null;
+            synchronized (IRCLink.this) {
+                if (ircToDuck.containsKey(target)) {
+                    final String targetChannel = ircToDuck.get(target);
+                    if (msg.startsWith("\u0001ACTION ") && msg.endsWith("\u0001")) {
+                        msg = msg.substring("\u0001ACTION ".length(), msg.length() - 1);
+                        msg = ControlCodeTranslator.IRC.translate(msg, ControlCodes.MINECRAFT, true);
+                        final String channelMessage = String.format(IRCLink.this.actionFormat, user, msg);
+                        postAction = new Runnable() {
+                            public void run() {
+                                IRCLink.this.plugin.sendChannelMessage(nick, username, host);
+                                IRCLink.this.plugin.sendChannelMessage(IRC_CLIENT_IDENTITY, targetChannel, channelMessage);
                             }
-                            playerListString.append(playerList.get(i));
+                        };
+                    } else if (msg.equals(".players")) {
+                        Map<String, List<String>> players = plugin.getState().getPlayersByServer(true);
+                        List<String> servers = new ArrayList<String>(players.size());
+                        servers.addAll(players.keySet());
+                        Collections.sort(servers, String.CASE_INSENSITIVE_ORDER);
+                        int serverCount = servers.size();
+                        int playerCount = 0;
+                        for (List<String> playerList : players.values()) {
+                            Collections.sort(playerList, String.CASE_INSENSITIVE_ORDER);
+                            playerCount += playerList.size();
                         }
-                        IRCLink.this.ircConnection.doPrivmsg(target, plugin.translate("irc.playerlist.line", serverName, playerList.size(), playerListString));
+                        IRCLink.this.ircConnection.doPrivmsg(target, plugin.translate("irc.playerlist.header", serverCount, playerCount));
+                        for (String serverName : servers) {
+                            List<String> playerList = players.get(serverName);
+                            StringBuilder playerListString = new StringBuilder();
+                            for (int i = 0; i < playerList.size(); i++) {
+                                if (i != 0) {
+                                    playerListString.append(", ");
+                                }
+                                playerListString.append(playerList.get(i));
+                            }
+                            IRCLink.this.ircConnection.doPrivmsg(target, plugin.translate("irc.playerlist.line", serverName, playerList.size(), playerListString));
+                        }
+                    } else {
+                        msg = ControlCodeTranslator.IRC.translate(msg, ControlCodes.MINECRAFT, true);
+                        final String channelMessage = String.format(IRCLink.this.messageFormat, user, msg);
+                        postAction = new Runnable() {
+                            public void run() {
+                                IRCLink.this.plugin.sendChannelMessage(IRC_CLIENT_IDENTITY, targetChannel, channelMessage);
+                            }
+                        };
                     }
                 } else {
-                    msg = ControlCodeTranslator.IRC.translate(msg, ControlCodes.MINECRAFT, true);
-                    IRCLink.this.plugin.sendChannelMessage(IRC_CLIENT_IDENTITY, targetChannel, String.format(IRCLink.this.messageFormat, user, msg));
+                    plugin.getLogger().info(name + ": PrivMsg to: " + target + " from: " + user + " message: " +  msg);
                 }
-            } else {
-                plugin.getLogger().info(name + ": PrivMsg to: " + target + " from: " + user + " message: " +  msg);
+            }
+            if (postAction != null) {
+                postAction.run();
             }
         }
 
@@ -165,13 +185,15 @@ public class IRCLink {
         
         @Override
         public void onDisconnected() {
-            IRCLink.this.plugin.getLogger().info(name + ": Disconnected from IRC server" + host + ":" + port);
-            if (IRCLink.this.shouldReconnect) {
-                try {
-                    IRCLink.this.disconnect();
-                    IRCLink.this.connect();
-                } catch (IOException ex) {
-                    IRCLink.this.plugin.getLogger().log(Level.SEVERE, name + ": Error reconnecting to IRC.");
+            synchronized (IRCLink.this) {
+                IRCLink.this.plugin.getLogger().info(name + ": Disconnected from IRC server" + host + ":" + port);
+                if (IRCLink.this.shouldReconnect) {
+                    try {
+                        IRCLink.this.disconnect();
+                        IRCLink.this.connect();
+                    } catch (IOException ex) {
+                        IRCLink.this.plugin.getLogger().log(Level.SEVERE, name + ": Error reconnecting to IRC.");
+                    }
                 }
             }
         }
@@ -185,15 +207,32 @@ public class IRCLink {
         public void onError(int num, String msg) {
             plugin.getLogger().warning(name + ": Error " + num + ": " + msg);
         }
-        
-        
+
+        @Override
+        public void onJoin(String chan, IRCUser user) {
+            synchronized (IRCLink.this) {
+                if (nick.equals(user.getNick())) {
+                    joinedChannels.put(chan, Boolean.TRUE);
+                }
+            }
+        }
+
+        @Override
+        public void onPart(String chan, IRCUser user, String msg) {
+            synchronized (IRCLink.this) {
+                if(nick.equals(user.getNick())) {
+                    joinedChannels.remove(chan);
+                }
+            }
+        }
     };
     private final Main plugin;
     private final String name;
     private final String messageFormat;
     private final String actionFormat;
-    private final HashMap<String, String> duckToIrc = new HashMap<String, String>();
-    private final HashMap<String, String> ircToDuck = new HashMap<String, String>();
+    private final Map<String, String> duckToIrc = new HashMap<String, String>();
+    private final Map<String, String> ircToDuck = new HashMap<String, String>();
+    private final Map<String, Boolean> joinedChannels = new HashMap<String, Boolean>();
     private final boolean useSsl;
     private final String host;
     private final int port;
@@ -254,6 +293,7 @@ public class IRCLink {
             ircConnection.doQuit();
         }
         ircConnection = null;
+        joinedChannels.clear();
     }
 
     public void addChannel(String duckChannel, String ircChannel) {
