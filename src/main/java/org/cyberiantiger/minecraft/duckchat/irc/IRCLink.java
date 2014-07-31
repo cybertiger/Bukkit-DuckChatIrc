@@ -163,6 +163,22 @@ public class IRCLink {
                     }
                 }
             }
+
+            @Override
+            public void onPing(String ping) {
+                IRCLink.this.ircConnection.doPong(ping);
+            }
+
+        @Override
+        public void onError(String msg) {
+            plugin.getLogger().warning("IRC Error: " + msg);
+        }
+
+        @Override
+        public void onError(int num, String msg) {
+            plugin.getLogger().warning("IRC ERROR " + num + ": " + msg);
+        }
+
             
     };
     private final Main plugin;
