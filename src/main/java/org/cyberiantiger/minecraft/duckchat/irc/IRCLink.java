@@ -41,7 +41,7 @@ public class IRCLink {
                 }
                 if (duckToIrc.containsKey(e.getChannel())) {
                     String ircChannel = duckToIrc.get(e.getChannel());
-                    if (joinedChannels.get(ircChannel)) {
+                    if (joinedChannels.containsKey(ircChannel)) {
                         String message = ControlCodeTranslator.MINECRAFT.translate(e.getMessage(), ControlCodes.IRC, true);
                         ircConnection.doPrivmsg(duckToIrc.get(e.getChannel()), message);
                     }
