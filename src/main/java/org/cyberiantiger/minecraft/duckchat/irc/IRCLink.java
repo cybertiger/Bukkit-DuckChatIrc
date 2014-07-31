@@ -141,6 +141,11 @@ public class IRCLink {
                 plugin.getLogger().info(name + ": PrivMsg to: " + target + " from: " + user + " message: " +  msg);
             }
         }
+
+        @Override
+        public void onNotice(String target, IRCUser user, String msg) {
+            plugin.getLogger().info(name + ": Notice to: " + target + " from: " + user + " message: " +  msg);
+        }
         
         @Override
         public void onRegistered() {
