@@ -60,7 +60,7 @@ public class Main extends JavaPlugin implements Listener {
                 String messageFormat = bridgeSection.getString("messageFormat", "<%s> %s");
                 String actionFormat = bridgeSection.getString("actionFormat", "*%s %s");
 
-                IRCLink ircLink = new IRCLink(this, useSsl, host, port, password, nick, username, realm, messageFormat, actionFormat);
+                IRCLink ircLink = new IRCLink(this, key, useSsl, host, port, password, nick, username, realm, messageFormat, actionFormat);
 
                 if (bridgeSection.isConfigurationSection("channels")) {
                     ConfigurationSection bridgeChannelSection = bridgeSection.getConfigurationSection("channels");
