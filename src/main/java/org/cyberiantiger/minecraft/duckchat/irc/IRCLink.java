@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimerTask;
 import java.util.logging.Level;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -185,14 +186,7 @@ public class IRCLink {
         public void onDisconnected() {
             synchronized (IRCLink.this) {
                 IRCLink.this.plugin.getLogger().info(name + ": Disconnected from IRC server" + host + ":" + port);
-                if (IRCLink.this.shouldReconnect) {
-                    try {
-                        IRCLink.this.disconnect();
-                        IRCLink.this.connect();
-                    } catch (IOException ex) {
-                        IRCLink.this.plugin.getLogger().log(Level.SEVERE, name + ": Error reconnecting to IRC.");
-                    }
-                }
+                scheduleReconnect();
             }
         }
         
@@ -224,6 +218,7 @@ public class IRCLink {
             }
         }
     };
+    private final static long[] RECONNECT_BACKOFF = new long[] { 0L, 10000L, 30000L, 60000L, 300000L }; // 0s, 10s, 30s, 1m, 5m
     private final Main plugin;
     private final String name;
     private final String messageFormat;
@@ -241,6 +236,19 @@ public class IRCLink {
     private IRCConnection ircConnection;
     private boolean shouldReconnect = false;
     private boolean haveRegistered = false;
+    private long lastReconnect = Long.MIN_VALUE;
+    private int reconnectCount = 0;
+    private TimerTask reconnectTask = new TimerTask() {
+        @Override
+        public void run() {
+            try {
+                connect();
+            } catch (IOException ioe) {
+                plugin.getLogger().warning(name + ": Count not connect to " + host + ":" + port);
+                scheduleReconnect();
+            }
+        }
+    };
 
     public IRCLink(Main plugin, String name, boolean useSsl, String host, int port, String password, String nick, String username, String realmname, String messageFormat, String actionFormat) {
         this.plugin = plugin;
@@ -257,11 +265,34 @@ public class IRCLink {
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
     }
 
+    public synchronized void scheduleReconnect() {
+        if (!shouldReconnect)
+            return;
+
+        long now = System.currentTimeMillis();
+
+        if (lastReconnect + 60000L <= now) {
+            // Last reconnect was over 60 seconds ago, reset reconnect counter.
+            reconnectCount = 0;
+        } else {
+            // Increment counter, last reconnect probably failed.
+            reconnectCount++;
+        }
+        // Work out the earliest time the next reconnect can be processed.
+        long reconnectTime =  lastReconnect + RECONNECT_BACKOFF[Math.min(reconnectCount, RECONNECT_BACKOFF.length -1)];
+        if (now > reconnectTime) {
+            reconnectTask.run();
+        } else {
+            plugin.getReconnectTimer().schedule(reconnectTask, new java.util.Date(reconnectTime));
+        }
+    }
+
     private synchronized boolean isConnected() {
         return ircConnection != null && ircConnection.isConnected() && haveRegistered;
     }
 
     public synchronized void connect() throws IOException {
+        lastReconnect = System.currentTimeMillis();
         if (useSsl) {
             ircConnection = new SSLIRCConnection(host, port, port, password, nick, username, realmname);
         } else {
@@ -285,6 +316,7 @@ public class IRCLink {
     }
 
     public synchronized void disconnect() throws IOException {
+        reconnectTask.cancel();
         shouldReconnect = false;
         haveRegistered = false;
         if (ircConnection != null && ircConnection.isConnected()) {

@@ -82,7 +82,7 @@
     <dependency>
       <groupId>org.schwering</groupId>
       <artifactId>irclib</artifactId>
-      <version>1.10</version>
+      <version>666.0</version>
     </dependency>
   </dependencies>
   <distributionManagement>

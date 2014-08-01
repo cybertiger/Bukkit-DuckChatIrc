@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
 import java.util.logging.Level;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -34,6 +35,7 @@ public class Main extends JavaPlugin implements Listener {
 
     private org.cyberiantiger.minecraft.duckchat.Main duckChat;
     private final List<IRCLink> ircLinks = new ArrayList();
+    private final Timer reconnectTimer = new Timer();
 
     // Messages.
     private final Map<String,String> messages = new HashMap<String,String>();
@@ -70,12 +72,7 @@ public class Main extends JavaPlugin implements Listener {
                         }
                     }
                 }
-                try {
-                    ircLink.connect();
-                    ircLinks.add(ircLink);
-                } catch (IOException ex) {
-                    getLogger().log(Level.WARNING, "Error connecting to IRC", ex);
-                }
+                ircLink.scheduleReconnect();
             }
         }
     }
@@ -201,6 +198,10 @@ public class Main extends JavaPlugin implements Listener {
             return result;
         }
         return null;
+    }
+
+    public Timer getReconnectTimer() {
+        return reconnectTimer;
     }
 
     public String translate(String key, Object... args) {
