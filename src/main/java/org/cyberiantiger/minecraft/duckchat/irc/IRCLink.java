@@ -229,13 +229,14 @@ public class IRCLink {
     private final String nick;
     private final String username;
     private final String realmname;
+    private final boolean debug;
     private IRCConnection ircConnection;
     private boolean shouldReconnect = false;
     private long lastReconnect = Long.MIN_VALUE;
     private int reconnectCount = 0;
     private TimerTask reconnectTask = null;
 
-    public IRCLink(Main plugin, String name, boolean useSsl, String host, int port, String password, String nick, String username, String realmname, String messageFormat, String actionFormat) {
+    public IRCLink(Main plugin, String name, boolean useSsl, String host, int port, String password, String nick, String username, String realmname, boolean debug, String messageFormat, String actionFormat) {
         this.plugin = plugin;
         this.name = name;
         this.useSsl = useSsl;
@@ -245,6 +246,7 @@ public class IRCLink {
         this.nick = nick;
         this.username = username;
         this.realmname = realmname;
+        this.debug = debug;
         this.messageFormat = messageFormat;
         this.actionFormat = actionFormat;
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
@@ -300,7 +302,7 @@ public class IRCLink {
         ircConnection.setDaemon(true);
         ircConnection.setColors(true);
         ircConnection.setPong(true);
-        //ircConnection.setDebug(true);
+        ircConnection.setDebug(debug);
         ircConnection.setTimeout(0);
         ircConnection.addIRCEventListener(ircEventAdapter);
         ircConnection.setUncaughtExceptionHandler(

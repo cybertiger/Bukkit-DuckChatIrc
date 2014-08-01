@@ -61,8 +61,9 @@ public class Main extends JavaPlugin implements Listener {
                 String realm = bridgeSection.getString("realm", "localhost");
                 String messageFormat = bridgeSection.getString("messageFormat", "<%s> %s");
                 String actionFormat = bridgeSection.getString("actionFormat", "*%s %s");
+                boolean debug = bridgeSection.getBoolean("debug", false);
 
-                IRCLink ircLink = new IRCLink(this, key, useSsl, host, port, password, nick, username, realm, messageFormat, actionFormat);
+                IRCLink ircLink = new IRCLink(this, key, useSsl, host, port, password, nick, username, realm, debug, messageFormat, actionFormat);
 
                 if (bridgeSection.isConfigurationSection("channels")) {
                     ConfigurationSection bridgeChannelSection = bridgeSection.getConfigurationSection("channels");
