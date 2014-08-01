@@ -5,7 +5,6 @@
 package org.cyberiantiger.minecraft.duckchat.irc;
 
 import org.cyberiantiger.minecraft.duckchat.command.SubCommand;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
