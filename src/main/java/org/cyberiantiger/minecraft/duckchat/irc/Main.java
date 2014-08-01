@@ -130,6 +130,7 @@ public class Main extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        reconnectTimer.cancel();
         disconnect();
     }
 
