@@ -35,8 +35,6 @@ public class IRCLink {
         @EventHandler
         public void onChannelMessage(ChannelMessageEvent e) {
             synchronized (IRCLink.this) {
-                if (!isConnected())
-                    return;
                 if (IRC_CLIENT_IDENTITY.equals(e.getSource())) {
                     return;
                 }
@@ -52,12 +50,12 @@ public class IRCLink {
         @EventHandler
         public void onMemberJoin(MemberJoinEvent e) {
             synchronized (IRCLink.this) {
-                if (!isConnected())
-                    return;
                 String message = plugin.translate("member.join", e.getName(), e.getHost());
                 message = ControlCodeTranslator.MINECRAFT.translate(message, ControlCodes.IRC, true);
                 for (String channel : duckToIrc.values()) {
-                    ircConnection.doPrivmsg(channel, message);
+                    if (joinedChannels.containsKey(channel)) {
+                        ircConnection.doPrivmsg(channel, message);
+                    }
                 }
             }
         }
@@ -65,12 +63,12 @@ public class IRCLink {
         @EventHandler
         public void onMemberLeave(MemberLeaveEvent e) {
             synchronized (IRCLink.this) {
-                if (!isConnected())
-                    return;
                 String message = plugin.translate("member.leave", e.getName(), e.getHost());
                 message = ControlCodeTranslator.MINECRAFT.translate(message, ControlCodes.IRC, true);
                 for (String channel : duckToIrc.values()) {
-                    ircConnection.doPrivmsg(channel, message);
+                    if (joinedChannels.containsKey(channel)) {
+                        ircConnection.doPrivmsg(channel, message);
+                    }
                 }
             }
         }
@@ -78,12 +76,12 @@ public class IRCLink {
         @EventHandler
         public void onServerJoin(ServerJoinEvent e) {
             synchronized (IRCLink.this) {
-                if (!isConnected())
-                    return;
                 String message = plugin.translate("server.join", e.getName());
                 message = ControlCodeTranslator.MINECRAFT.translate(message, ControlCodes.IRC, true);
                 for (String channel : duckToIrc.values()) {
-                    ircConnection.doPrivmsg(channel, message);
+                    if (joinedChannels.containsKey(channel)) {
+                        ircConnection.doPrivmsg(channel, message);
+                    }
                 }
             }
         }
@@ -91,12 +89,12 @@ public class IRCLink {
         @EventHandler
         public void onServerLeave(ServerLeaveEvent e) {
             synchronized (IRCLink.this) {
-                if (!isConnected())
-                    return;
                 String message = plugin.translate("server.leave", e.getName());
                 message = ControlCodeTranslator.MINECRAFT.translate(message, ControlCodes.IRC, true);
                 for (String channel : duckToIrc.values()) {
-                    ircConnection.doPrivmsg(channel, message);
+                    if (joinedChannels.containsKey(channel)) {
+                        ircConnection.doPrivmsg(channel, message);
+                    }
                 }
             }
         }
@@ -175,9 +173,6 @@ public class IRCLink {
                 for (String ircChannel : ircToDuck.keySet()) {
                     ircConnection.doJoin(ircChannel);
                 }
-                synchronized (IRCLink.this) {
-                    IRCLink.this.haveRegistered = true;
-                }
             }
             plugin.getLogger().info(name + ": Reply " + num + " = " + value + ": " + msg);
         }
@@ -186,6 +181,7 @@ public class IRCLink {
         public void onDisconnected() {
             synchronized (IRCLink.this) {
                 IRCLink.this.plugin.getLogger().info(name + ": Disconnected from IRC server" + host + ":" + port);
+                joinedChannels.clear();
                 scheduleReconnect();
             }
         }
@@ -235,20 +231,9 @@ public class IRCLink {
     private final String realmname;
     private IRCConnection ircConnection;
     private boolean shouldReconnect = false;
-    private boolean haveRegistered = false;
     private long lastReconnect = Long.MIN_VALUE;
     private int reconnectCount = 0;
-    private TimerTask reconnectTask = new TimerTask() {
-        @Override
-        public void run() {
-            try {
-                connect();
-            } catch (IOException ioe) {
-                plugin.getLogger().warning(name + ": Count not connect to " + host + ":" + port);
-                scheduleReconnect();
-            }
-        }
-    };
+    private TimerTask reconnectTask = null;
 
     public IRCLink(Main plugin, String name, boolean useSsl, String host, int port, String password, String nick, String username, String realmname, String messageFormat, String actionFormat) {
         this.plugin = plugin;
@@ -265,7 +250,16 @@ public class IRCLink {
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
     }
 
-    public synchronized void scheduleReconnect() {
+    private void tryConnect() {
+        try {
+            connect();
+        } catch (IOException ioe) {
+            plugin.getLogger().warning(name + ": Count not connect to " + host + ":" + port);
+            scheduleReconnect();
+        }
+    }
+
+    private synchronized void scheduleReconnect() {
         if (!shouldReconnect)
             return;
 
@@ -281,17 +275,22 @@ public class IRCLink {
         // Work out the earliest time the next reconnect can be processed.
         long reconnectTime =  lastReconnect + RECONNECT_BACKOFF[Math.min(reconnectCount, RECONNECT_BACKOFF.length -1)];
         if (now > reconnectTime) {
-            reconnectTask.run();
+            tryConnect();
         } else {
-            plugin.getReconnectTimer().schedule(reconnectTask, new java.util.Date(reconnectTime));
+            if (reconnectTask != null) {
+                reconnectTask.cancel();
+                reconnectTask = null;
+            }
+            plugin.getReconnectTimer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    tryConnect();
+                }
+            }, new java.util.Date(reconnectTime));
         }
     }
 
-    private synchronized boolean isConnected() {
-        return ircConnection != null && ircConnection.isConnected() && haveRegistered;
-    }
-
-    public synchronized void connect() throws IOException {
+    private synchronized void connect() throws IOException {
         lastReconnect = System.currentTimeMillis();
         if (useSsl) {
             ircConnection = new SSLIRCConnection(host, port, port, password, nick, username, realmname);
@@ -311,22 +310,28 @@ public class IRCLink {
                     }
                 }
                 );
-        shouldReconnect = true;
         ircConnection.connect();
     }
 
-    public synchronized void disconnect() throws IOException {
-        reconnectTask.cancel();
-        shouldReconnect = false;
-        haveRegistered = false;
-        if (ircConnection != null && ircConnection.isConnected()) {
-            ircConnection.doQuit();
+    public synchronized void setConnected(boolean connected) {
+        if (connected && !shouldReconnect) {
+            shouldReconnect = true;
+            scheduleReconnect();
+        } else if (!connected && shouldReconnect) {
+            shouldReconnect = false;
+            if (reconnectTask != null) {
+                reconnectTask.cancel();
+                reconnectTask = null;
+            }
+            if (ircConnection != null) {
+                ircConnection.close();
+                ircConnection = null;
+            }
+            joinedChannels.clear();
         }
-        ircConnection = null;
-        joinedChannels.clear();
     }
 
-    public void addChannel(String duckChannel, String ircChannel) {
+    public synchronized void addChannel(String duckChannel, String ircChannel) {
         duckToIrc.put(duckChannel, ircChannel);
         ircToDuck.put(ircChannel, duckChannel);
     }

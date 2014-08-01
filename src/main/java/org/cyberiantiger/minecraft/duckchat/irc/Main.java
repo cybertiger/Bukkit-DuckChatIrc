@@ -72,7 +72,7 @@ public class Main extends JavaPlugin implements Listener {
                         }
                     }
                 }
-                ircLink.scheduleReconnect();
+                ircLink.setConnected(true);
             }
         }
     }
@@ -80,11 +80,7 @@ public class Main extends JavaPlugin implements Listener {
     // Net
     private void disconnect() {
         for (IRCLink ircLink : ircLinks) {
-            try {
-                ircLink.disconnect();
-            } catch (IOException ex) {
-                getLogger().log(Level.WARNING, null, ex);
-            }
+            ircLink.setConnected(false);
         }
         ircLinks.clear();
     }
