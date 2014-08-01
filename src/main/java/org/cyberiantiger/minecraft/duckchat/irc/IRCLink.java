@@ -300,7 +300,8 @@ public class IRCLink {
         ircConnection.setDaemon(true);
         ircConnection.setColors(true);
         ircConnection.setPong(true);
-        ircConnection.setDebug(true);
+        //ircConnection.setDebug(true);
+        ircConnection.setTimeout(0);
         ircConnection.addIRCEventListener(ircEventAdapter);
         ircConnection.setUncaughtExceptionHandler(
                 new Thread.UncaughtExceptionHandler() {
