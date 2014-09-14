@@ -113,6 +113,7 @@ public class IRCLink {
                     if (msg.startsWith("\u0001ACTION ") && msg.endsWith("\u0001")) {
                         msg = msg.substring("\u0001ACTION ".length(), msg.length() - 1);
                         msg = ControlCodeTranslator.IRC.translate(msg, ControlCodes.MINECRAFT, true);
+                        msg = IRCLink.this.plugin.filter(msg);
                         final String channelMessage = String.format(IRCLink.this.actionFormat, user, msg);
                         postAction = new Runnable() {
                             public void run() {
@@ -145,6 +146,7 @@ public class IRCLink {
                         }
                     } else {
                         msg = ControlCodeTranslator.IRC.translate(msg, ControlCodes.MINECRAFT, true);
+                        msg = IRCLink.this.plugin.filter(msg);
                         final String channelMessage = String.format(IRCLink.this.messageFormat, user, msg);
                         postAction = new Runnable() {
                             public void run() {

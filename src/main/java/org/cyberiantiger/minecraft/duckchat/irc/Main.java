@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.logging.Level;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -39,6 +41,8 @@ public class Main extends JavaPlugin implements Listener {
     // Messages.
     private final Map<String,String> messages = new HashMap<String,String>();
 
+    // Filters.
+    private final Map<Pattern, String> filters = new HashMap<Pattern, String>();
 
     // Net
     private void connect() {
@@ -92,6 +96,20 @@ public class Main extends JavaPlugin implements Listener {
             for (String key : messageSection.getKeys(true)) {
                 if (messageSection.isString(key)) {
                     messages.put(key, messageSection.getString(key).replace('&', ChatColor.COLOR_CHAR));
+                }
+            }
+        }
+        synchronized (filters) {
+            filters.clear();
+            if (config.isConfigurationSection("filters")) {
+                ConfigurationSection filterSection = config.getConfigurationSection("filters");
+                for (String key : filterSection.getKeys(true)) {
+                    try {
+                        Pattern p = Pattern.compile(key);
+                        filters.put(p, filterSection.getString(key));
+                    } catch (PatternSyntaxException e) {
+                        getLogger().warning("Ignoring filter: " + key  + " : " + e.getMessage());
+                    }
                 }
             }
         }
@@ -215,5 +233,14 @@ public class Main extends JavaPlugin implements Listener {
 
     public StateManager getState() {
         return duckChat.getState();
+    }
+
+    public String filter(String msg) {
+        synchronized (filters) {
+            for (Map.Entry<Pattern,String> e : filters.entrySet()) {
+                msg = e.getKey().matcher(msg).replaceAll(e.getValue());
+            }
+            return msg;
+        }
     }
 }

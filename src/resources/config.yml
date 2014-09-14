@@ -12,6 +12,8 @@
 #        actionFormat: '[global] *%s@IRC %s'
 #        channels:
 #            global: '#yourchannel'
+#       filters:
+#            '\.com': 'matecraft.org'
                 
 messages:
         irc:
