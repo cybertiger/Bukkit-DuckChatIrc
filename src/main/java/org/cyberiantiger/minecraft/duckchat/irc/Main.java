@@ -191,7 +191,7 @@ public class Main extends JavaPlugin implements Listener {
     public String translate(String key, Object... args) {
         if (config != null) {
             Map<String,String> messages = config.getMessages();
-            if (!messages.containsKey(key)) {
+            if (messages.containsKey(key)) {
                 return String.format(messages.get(key), args);
             }
         }
