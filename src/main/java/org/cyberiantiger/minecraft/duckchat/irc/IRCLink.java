@@ -20,6 +20,7 @@ import org.cyberiantiger.minecraft.duckchat.event.MemberLeaveEvent;
 import org.cyberiantiger.minecraft.duckchat.event.ServerJoinEvent;
 import org.cyberiantiger.minecraft.duckchat.event.ServerLeaveEvent;
 import org.cyberiantiger.minecraft.duckchat.event.ServerSuspectEvent;
+import org.cyberiantiger.minecraft.duckchat.irc.config.IRCLinkConfig;
 import org.schwering.irc.lib.IRCConnection;
 import org.schwering.irc.lib.IRCEventAdapter;
 import org.schwering.irc.lib.IRCUser;
@@ -254,6 +255,16 @@ public class IRCLink {
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
     }
 
+    public IRCLink(Main plugin, IRCLinkConfig ircLinkConfig) {
+        this(plugin, ircLinkConfig.getName(), ircLinkConfig.isSsl(), ircLinkConfig.getHost(), ircLinkConfig.getPort(), ircLinkConfig.getPassword(), ircLinkConfig.getNick(), ircLinkConfig.getUsername(), ircLinkConfig.getRealm(), ircLinkConfig.isDebug(), ircLinkConfig.getMessageFormat(), ircLinkConfig.getActionFormat());
+        Map<String,String> channels = ircLinkConfig.getChannels();
+        if (channels != null) {
+            for (Map.Entry<String,String> e : channels.entrySet()) {
+                addChannel(e.getKey(), e.getValue());
+            }
+        }
+    }
+
     private void tryConnect() {
         try {
             connect();
@@ -336,7 +347,7 @@ public class IRCLink {
         }
     }
 
-    public synchronized void addChannel(String duckChannel, String ircChannel) {
+    public final synchronized void addChannel(String duckChannel, String ircChannel) {
         duckToIrc.put(duckChannel, ircChannel);
         ircToDuck.put(ircChannel, duckChannel);
     }

@@ -4,21 +4,18 @@
  */
 package org.cyberiantiger.minecraft.duckchat.irc;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import org.cyberiantiger.minecraft.duckchat.command.SubCommand;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.logging.Level;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cyberiantiger.minecraft.duckchat.command.PermissionException;
@@ -26,60 +23,47 @@ import org.cyberiantiger.minecraft.duckchat.command.SenderTypeException;
 import org.cyberiantiger.minecraft.duckchat.command.SubCommandException;
 import org.cyberiantiger.minecraft.duckchat.command.UsageException;
 import org.cyberiantiger.minecraft.duckchat.irc.command.ReloadSubCommand;
+import org.cyberiantiger.minecraft.duckchat.irc.config.Config;
+import org.cyberiantiger.minecraft.duckchat.irc.config.IRCLinkConfig;
 import org.cyberiantiger.minecraft.duckchat.state.StateManager;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.CustomClassLoaderConstructor;
+import org.yaml.snakeyaml.error.YAMLException;
+import org.yaml.snakeyaml.introspector.BeanAccess;
 
 /**
  *
  * @author antony
  */
 public class Main extends JavaPlugin implements Listener {
+    private static final String CONFIG = "config.yml";
 
     private org.cyberiantiger.minecraft.duckchat.Main duckChat;
     private final List<IRCLink> ircLinks = new ArrayList();
     private final Timer reconnectTimer = new Timer();
 
-    // Messages.
-    private final Map<String,String> messages = new HashMap<String,String>();
 
-    // Filters.
-    private final Map<Pattern, String> filters = new HashMap<Pattern, String>();
+    // Config
+    private Config config;
 
     // Net
     private void connect() {
-        FileConfiguration config = getConfig();
-        
-        if (config.isConfigurationSection("irc-bridges")) {
-            ConfigurationSection bridgesSection = config.getConfigurationSection("irc-bridges");
-            for (String key : bridgesSection.getKeys(false)) {
-                if (!bridgesSection.isConfigurationSection(key)) {
-                    continue;
+        if (config != null) {
+            List<IRCLinkConfig> l = config.getIrcBridges();
+            if (l != null) {
+                for (IRCLinkConfig ircLinkConfig : l) {
+                    IRCLink ircLink = new IRCLink(this, ircLinkConfig);
+                    ircLinks.add(ircLink);
+                    ircLink.setConnected(true);
                 }
-                ConfigurationSection bridgeSection = bridgesSection.getConfigurationSection(key);
-                boolean useSsl = bridgeSection.getBoolean("ssl", false);
-                String host = bridgeSection.getString("host", "localhost");
-                int port = bridgeSection.getInt("port", 6667);
-                String password = bridgeSection.getString("password", "");
-                String nick = bridgeSection.getString("nick", "DuckChat");
-                String username = bridgeSection.getString("username", "bot");
-                String realm = bridgeSection.getString("realm", "localhost");
-                String messageFormat = bridgeSection.getString("messageFormat", "<%s> %s");
-                String actionFormat = bridgeSection.getString("actionFormat", "*%s %s");
-                boolean debug = bridgeSection.getBoolean("debug", false);
-
-                IRCLink ircLink = new IRCLink(this, key, useSsl, host, port, password, nick, username, realm, debug, messageFormat, actionFormat);
-
-                if (bridgeSection.isConfigurationSection("channels")) {
-                    ConfigurationSection bridgeChannelSection = bridgeSection.getConfigurationSection("channels");
-                    for (String duckChannel : bridgeChannelSection.getKeys(false)) {
-                        if (bridgeChannelSection.isString(duckChannel)) {
-                            ircLink.addChannel(duckChannel, bridgeChannelSection.getString(duckChannel));
-                        }
-                    }
-                }
-                ircLink.setConnected(true);
             }
         }
     }
+    
+    private File getConfigFile() {
+        return new File(getDataFolder(), CONFIG);
+    }
+    
 
     // Net
     private void disconnect() {
@@ -90,28 +74,14 @@ public class Main extends JavaPlugin implements Listener {
     }
 
     private void load() {
-        FileConfiguration config = getConfig();
-        if (config.isConfigurationSection("messages")) {
-            ConfigurationSection messageSection = config.getConfigurationSection("messages");
-            for (String key : messageSection.getKeys(true)) {
-                if (messageSection.isString(key)) {
-                    messages.put(key, messageSection.getString(key).replace('&', ChatColor.COLOR_CHAR));
-                }
-            }
-        }
-        synchronized (filters) {
-            filters.clear();
-            if (config.isConfigurationSection("filters")) {
-                ConfigurationSection filterSection = config.getConfigurationSection("filters");
-                for (String key : filterSection.getKeys(true)) {
-                    try {
-                        Pattern p = Pattern.compile(key);
-                        filters.put(p, filterSection.getString(key));
-                    } catch (PatternSyntaxException e) {
-                        getLogger().warning("Ignoring filter: " + key  + " : " + e.getMessage());
-                    }
-                }
-            }
+        try {
+            Yaml configLoader = new Yaml(new CustomClassLoaderConstructor(Config.class, getClass().getClassLoader()));
+            configLoader.setBeanAccess(BeanAccess.FIELD);
+            this.config = configLoader.loadAs(new FileReader(getConfigFile()), Config.class);
+        } catch (IOException ex) {
+            getLogger().log(Level.SEVERE, "Error loading configuration", ex);
+        } catch (YAMLException ex) {
+            getLogger().log(Level.SEVERE, "Error loading configuration", ex);
         }
     }
 
@@ -137,7 +107,6 @@ public class Main extends JavaPlugin implements Listener {
 
     public void reload() {
         disconnect();
-        reloadConfig();
         load();
         connect();
     }
@@ -220,11 +189,13 @@ public class Main extends JavaPlugin implements Listener {
     }
 
     public String translate(String key, Object... args) {
-        if (!messages.containsKey(key)) {
-            return duckChat.translate(key, args);
-        } else {
-            return String.format(messages.get(key), args);
+        if (config != null) {
+            Map<String,String> messages = config.getMessages();
+            if (!messages.containsKey(key)) {
+                return String.format(messages.get(key), args);
+            }
         }
+        return duckChat.translate(key, args);
     }
 
     public void sendChannelMessage(String identify, String targetChannel, String format) {
@@ -236,11 +207,14 @@ public class Main extends JavaPlugin implements Listener {
     }
 
     public String filter(String msg) {
-        synchronized (filters) {
-            for (Map.Entry<Pattern,String> e : filters.entrySet()) {
-                msg = e.getKey().matcher(msg).replaceAll(e.getValue());
+        if (config != null) {
+            Map<String,String> filters = config.getFilters();
+            if (filters != null) {
+                for (Map.Entry<String,String> e : filters.entrySet()) {
+                    msg = msg.replaceAll(e.getKey(), e.getValue());
+                }
             }
-            return msg;
         }
+        return msg;
     }
 }
