@@ -1,5 +1,5 @@
 # Example irc bridge.
-#irc-bridges:
+#ircBridges:
 #    test:
 #        ssl: false
 #        host: localhost
